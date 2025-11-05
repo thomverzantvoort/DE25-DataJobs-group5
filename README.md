@@ -1,328 +1,102 @@
-\# Netflix User Intelligence – Data Engineering Project
+Netflix User Intelligence – Data Engineering Project
 
+Overview
+This project is developed for the JADS Data Engineering course (Assignment 2). The goal is to design and implement a Big Data Architecture and two Spark data processing pipelines that generate both real-time and historical insights into user behavior on a streaming platform. The project is based on the Netflix 2025 User Behavior Dataset from Kaggle, which contains user activity, subscription, and content data.
 
-
-\## Overview
-
-
-
-This project is developed for the JADS Data Engineering course (Assignment 2). The goal is to design and implement a Big Data Architecture and two Spark data processing pipelines that generate both real-time and historical insights into user behavior on a streaming platform. The project is based on the \*\*Netflix 2025 User Behavior Dataset\*\* from Kaggle, which contains user activity, subscription, and content data.
-
-
-
-The system is implemented on \*\*Google Cloud Platform (GCP)\*\* using \*\*Apache Spark\*\*, \*\*Kafka\*\*, \*\*BigQuery\*\*, and \*\*Looker Studio\*\*, and deployed using \*\*Docker Compose\*\* as demonstrated in \*\*Lab 6 – Implementing Big Data Architectures with Containers\*\*.
-
-
+The system is implemented on Google Cloud Platform (GCP) using Apache Spark, Kafka, BigQuery, and Looker Studio, and deployed using Docker Compose as demonstrated in Lab 6 – Implementing Big Data Architectures with Containers.
 
 ---
 
-
-
-\## Dataset Description
-
-
-
+Dataset Description
 The project uses the following datasets from the Netflix 2025 User Behavior collection on Kaggle:
 
+1. users.csv contains user account and demographic attributes such as user identifier, country, device type, and plan.
+2. movies.csv contains catalog metadata such as show or movie identifier, title, genre, release year, and duration.
+3. watch_history.csv contains granular viewing events per user with timestamps, play duration, completion percentage, and event type such as play, pause, or stop
+4. reviews.csv contains user generated ratings or textual reviews per movie.
+5. search_logs.csv contains user search events with timestamp, query text, and optional clicked item.
+6. recommendation_logs.csv contains recommendation delivery or click events showing which items were recommended and whether a user interacted.
 
-
-1\. \*\*user\_data.csv\*\* – User demographic and account information (age, gender, country, device, plan).
-
-2\. \*\*subscription\_data.csv\*\* – Details about each user’s subscription plan, signup date, and renewal information.
-
-3\. \*\*show\_data.csv\*\* – Metadata of available content, including title, category, duration, and genre.
-
-4\. \*\*watch\_history.csv\*\* – Log of all user viewing sessions with timestamps, watch duration, and event types.
-
-5\. \*\*ratings\_data.csv\*\* – User ratings and feedback for shows they have watched.
-
-
-
-The dataset follows a star schema where `watch\_history.csv` acts as the fact table and all other files act as dimension tables. This structure enables joining and aggregating data efficiently during processing.
-
-
+The dataset follows a star schema where watch_history.csv acts as the fact table and all other files act as dimension tables. This structure enables joining and aggregating data efficiently during processing.
 
 ---
 
+Step-by-Step Implementation Plan
 
-
-\## Step-by-Step Implementation Plan
-
-
-
-\### Step 1 – Implementing the Big Data Architecture with Containers
-
-
-
-Create a modular and reproducible environment using \*\*Docker Compose\*\*.
-
+Step 1 – Implementing the Big Data Architecture with Containers
+Create a modular and reproducible environment using Docker Compose.
 The architecture will include:
 
+* Zookeeper and Kafka for streaming event ingestion
+* Spark master and worker nodes for distributed batch and streaming jobs
+* Google Cloud Storage (GCS) as raw and intermediate storage
+* BigQuery as the serving and analytical warehouse
+* Looker Studio for visualization
 
-
-\* \*\*Zookeeper and Kafka\*\* for streaming event ingestion
-
-\* \*\*Spark master and worker nodes\*\* for distributed batch and streaming jobs
-
-\* \*\*Google Cloud Storage (GCS)\*\* as raw and intermediate storage
-
-\* \*\*BigQuery\*\* as the serving and analytical warehouse
-
-\* \*\*Looker Studio\*\* for visualization
-
-
-
-The Docker Compose setup is based on the approach demonstrated in \*\*Lab 6 (Implementing Big Data Architectures with Containers)\*\*. The \*\*DevOpsCycle Docker Compose Cheat Sheet\*\* is used as a reference for service configuration and networking.
-
-
-
-\### Step 2 – Preparing and Uploading Data to GCP
-
-
-
-Download the Netflix dataset from Kaggle and upload each CSV file to a Cloud Storage bucket under a `/raw` folder.
-
+Step 2 – Preparing and Uploading Data to GCP
+Download the Netflix dataset from Kaggle and upload each CSV file to a Cloud Storage bucket under a /raw folder.
 Example folder structure:
 
-
-
 ```
-
 gs://de-netflix/raw/
-
-&nbsp;  user\_data.csv
-
-&nbsp;  subscription\_data.csv
-
-&nbsp;  show\_data.csv
-
-&nbsp;  watch\_history.csv
-
-&nbsp;  ratings\_data.csv
-
+   movies.csv
+   recommendations_logs.csv
+   reviews.csv
+   search_logs.csv
+   users.csv
+   watch_history.csv
 ```
 
+Inspect the schema and confirm the consistency of keys such as user_id and show_id. These will be used for joins and aggregations.
 
+Step 3 – Developing the Batch Data Pipeline
+Implement a PySpark batch job to process and aggregate historical data:
 
-Inspect the schema and confirm the consistency of keys such as `user\_id` and `show\_id`. These will be used for joins and aggregations.
+1. Load all raw CSVs from Cloud Storage.
+2. Join tables based on their key relationships (user_id, show_id).
+3. Clean and transform data (filter invalid rows, parse timestamps).
+4. Compute monthly aggregates such as:
 
+   * Total watch time per country and plan
+   * Average rating per genre
+   * Monthly active users and retention rate
+5. Write results to BigQuery tables:
 
-
-\### Step 3 – Developing the Batch Data Pipeline
-
-
-
-Implement a \*\*PySpark batch job\*\* to process and aggregate historical data:
-
-
-
-1\. Load all raw CSVs from Cloud Storage.
-
-2\. Join tables based on their key relationships (user\_id, show\_id).
-
-3\. Clean and transform data (filter invalid rows, parse timestamps).
-
-4\. Compute monthly aggregates such as:
-
-
-
-&nbsp;  \* Total watch time per country and plan
-
-&nbsp;  \* Average rating per genre
-
-&nbsp;  \* Monthly active users and retention rate
-
-5\. Write results to BigQuery tables:
-
-
-
-&nbsp;  \* `monthly\_engagement`
-
-&nbsp;  \* `cohort\_retention`
-
-6\. Automate this batch process using a \*\*Crontab schedule\*\*.
-
-
+   * monthly_engagement
+   * cohort_retention
+6. Automate this batch process using a Crontab schedule.
 
 This pipeline provides insights into user engagement trends and subscription retention.
 
+Step 4 – Implementing the Streaming Data Pipeline
+Develop a Spark Structured Streaming job that reads simulated real-time events from Kafka:
 
+1. Create a Kafka producer that replays events from watch_history.csv as JSON messages.
+2. Define a Spark Structured Streaming consumer that reads from the Kafka topic.
+3. Parse and validate messages, apply watermarking for late data, and perform time-windowed aggregations.
+4. Compute real-time metrics such as:
 
-\### Step 4 – Implementing the Streaming Data Pipeline
-
-
-
-Develop a \*\*Spark Structured Streaming job\*\* that reads simulated real-time events from Kafka:
-
-
-
-1\. Create a Kafka producer that replays events from `watch\_history.csv` as JSON messages.
-
-2\. Define a Spark Structured Streaming consumer that reads from the Kafka topic.
-
-3\. Parse and validate messages, apply watermarking for late data, and perform time-windowed aggregations.
-
-4\. Compute real-time metrics such as:
-
-
-
-&nbsp;  \* Active users per minute
-
-&nbsp;  \* Event type distribution (plays, pauses, skips)
-
-&nbsp;  \* Average session duration
-
-5\. Continuously write aggregated data to BigQuery in append mode.
-
-
+   * Active users per minute
+   * Event type distribution (plays, pauses, skips)
+   * Average session duration
+5. Continuously write aggregated data to BigQuery in append mode.
 
 This pipeline supports real-time dashboards and monitoring.
 
+Step 5 – Designing Dashboards in Looker Studio
+Connect the BigQuery tables generated by both pipelines to Looker Studio to visualize key metrics.
 
+Dashboard 1: Real-Time Engagement
 
-\### Step 5 – Designing Dashboards in Looker Studio
+* Active users per minute
+* Event type distribution
+* Top genres and countries
+* Average session duration
 
+Dashboard 2: Historical Trends
 
-
-Connect the BigQuery tables generated by both pipelines to \*\*Looker Studio\*\* to visualize key metrics.
-
-
-
-\*\*Dashboard 1: Real-Time Engagement\*\*
-
-
-
-\* Active users per minute
-
-\* Event type distribution
-
-\* Top genres and countries
-
-\* Average session duration
-
-
-
-\*\*Dashboard 2: Historical Trends\*\*
-
-
-
-\* Monthly active users (MAU) per plan and country
-
-\* Retention and churn analysis
-
-\* Skip rate and watch duration trends
-
-\* Genre performance over time
-
-
-
-This approach follows the visualization setup recommended in \*\*Lab 6 – GCP Looker Studio Integration\*\*.
-
-
-
-\### Step 6 – Reflection and Alternative Design
-
-
-
-In the report, compare your architecture to alternative frameworks:
-
-
-
-\* \*\*Lambda Architecture\*\*: Separate speed (streaming) and batch layers, unified through a serving layer.
-
-\* \*\*Bronze–Silver–Gold Pattern\*\*:
-
-
-
-&nbsp; \* Bronze – raw data (Kafka, GCS)
-
-&nbsp; \* Silver – cleaned data
-
-&nbsp; \* Gold – aggregated business insights in BigQuery
-
-
-
-Discuss trade-offs in scalability, maintainability, and cost.
-
-
-
-\### Step 7 – Documentation and Deliverables
-
-
-
-Prepare the following deliverables:
-
-
-
-\* \*\*GitHub Repository\*\* containing all scripts, Docker Compose configuration, and documentation.
-
-\* \*\*Report (PDF, <7 pages)\*\* with the sections:
-
-
-
-&nbsp; 1. Overview of Data Pipelines
-
-&nbsp; 2. Design and Implementation of Data Architecture
-
-&nbsp; 3. Design and Implementation of Pipelines
-
-&nbsp; 4. Reflection and Alternative Designs
-
-&nbsp; 5. Individual Contributions
-
-\* \*\*Demo Video (≤ 5 minutes)\*\* showing:
-
-
-
-&nbsp; \* Running streaming job with Kafka logs
-
-&nbsp; \* Real-time dashboard updates
-
-&nbsp; \* Results of the batch job in BigQuery
-
-&nbsp; \* Overview of system design
-
-
-
----
-
-
-
-\## Summary of Tools and References
-
-
-
-\* \*\*Apache Spark\*\* for distributed processing (batch and stream)
-
-\* \*\*Kafka\*\* for streaming data ingestion
-
-\* \*\*Docker Compose\*\* for container orchestration (based on Lab 6)
-
-\* \*\*Google Cloud Storage\*\* for raw and processed data
-
-\* \*\*BigQuery\*\* as data warehouse
-
-\* \*\*Looker Studio\*\* for dashboard visualization
-
-\* \*\*Kaggle Dataset:\*\* Netflix 2025 User Behavior Dataset
-
-\* \*\*References:\*\*
-
-
-
-&nbsp; \* Lab 6 – Implementing Big Data Architectures with Containers (Dr. Indika Kumara, 2025)
-
-&nbsp; \* The Ultimate Docker Compose Cheat Sheet – DevOpsCycle (2024)
-
-&nbsp; \* Assignment 2 Guidelines – Design and Implementation of Data Architecture and Data Processing Pipelines (JADS Data Engineering 2025)
-
-
-
----
-
-
-
-This README serves as the main reference for project setup and progress. Each step can be completed sequentially, resulting in a fully functional cloud-based data engineering solution that demonstrates both batch and streaming data processing capabilities.
-
-
+* Monthly active users (MAU) per plan and country
+* Retention and churn analysis
+* Skip rate and watch duration trends
+* Genre performance over time
 
