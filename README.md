@@ -37,16 +37,6 @@ Step 2 – Preparing and Uploading Data to GCP
 Download the Netflix dataset from Kaggle and upload each CSV file to a Cloud Storage bucket under a /raw folder.
 Example folder structure:
 
-```
-gs://de-netflix/raw/
-   movies.csv
-   recommendations_logs.csv
-   reviews.csv
-   search_logs.csv
-   users.csv
-   watch_history.csv
-```
-
 Inspect the schema and confirm the consistency of keys such as user_id and show_id. These will be used for joins and aggregations.
 
 Step 3 – Developing the Batch Data Pipeline
