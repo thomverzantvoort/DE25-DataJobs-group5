@@ -7,7 +7,7 @@ Run this ONCE to set up the Kafka topic before starting producer/consumer
 from kafka.admin import KafkaAdminClient, NewTopic
 
 # Configuration - UPDATE THIS!
-KAFKA_BOOTSTRAP_SERVERS = "34.44.222.225:9092"  # Your VM's external IP
+KAFKA_BOOTSTRAP_SERVERS = "136.113.194.230"  # Your VM's external IP
 TOPIC_NAME = "netflix_watch_events"
 NUM_PARTITIONS = 3  # More partitions = more parallel processing
 REPLICATION_FACTOR = 1  # Single broker = replication 1
