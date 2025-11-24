@@ -13,7 +13,7 @@ from kafka import KafkaProducer
 from kafka.errors import KafkaError
 
 # Configuration - UPDATE THESE!
-KAFKA_BOOTSTRAP_SERVERS = "34.44.222.225:9092"  # Your VM's external IP
+KAFKA_BOOTSTRAP_SERVERS = "136.113.194.230"  # Your VM's external IP
 KAFKA_TOPIC = "netflix_watch_events"
 JSON_DATA_DIR = "../../Data/streaming"
 EVENTS_PER_SECOND = 5  # Simulate realistic streaming rate

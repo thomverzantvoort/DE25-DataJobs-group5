@@ -1,0 +1,170 @@
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║           NETFLIX DATA ENGINEERING - LAMBDA ARCHITECTURE DIAGRAM                 ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           DATA SOURCES (Kaggle)                                 │
+│  users.csv │ movies.csv │ watch_history.csv │ reviews.csv │ search_logs.csv     │
+└───────────────────────────────┬─────────────────────────────────────────────────┘
+                                │
+                                ▼
+                    ┌───────────────────────────┐
+                    │  Google Cloud Storage     │
+                    │  Bucket: data_netflix_2025│
+                    │  /raw/*.csv              │
+                    │  /streaming/*.json       │
+                    └───────────┬───────────────┘
+                                │
+                ┌───────────────┴───────────────┐
+                │                               │
+                ▼                               ▼
+    ┌───────────────────────┐      ┌───────────────────────┐
+    │   SPEED LAYER        │      │   BATCH LAYER         │
+    │   (Streaming)        │      │   (Historical)        │
+    └───────────────────────┘      └───────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              SPEED LAYER                                        │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+    [Local Machine]
+    kafka_producer.py
+    (5 events/sec)
+            │
+            │ External IP: 136.113.194.230:9092
+            ▼
+    ┌───────────────────────────────────────────────────────────────┐
+    │                    DOCKER CONTAINERS                          │
+    │  ┌──────────────┐                                              │
+    │  │ Zookeeper    │ Port: 2181                                   │
+    │  └──────┬───────┘                                              │
+    │         │                                                      │
+    │         ▼                                                      │
+    │  ┌──────────────┐                                              │
+    │  │ Kafka Broker │ Topic: netflix_watch_events (3 partitions) │
+    │  │ Port: 9093   │                                              │
+    │  └──────┬───────┘                                              │
+    │         │                                                      │
+    │         │ Internal: kafka1:9093                               │
+    │         ▼                                                      │
+    │  ┌──────────────────────────────────────────────────────────┐ │
+    │  │ Spark Driver (Jupyter)                                   │ │
+    │  │ Port: 8888                                                │ │
+    │  │ Notebook: 03_streaming_pipeline_netflix_kafkatopics.ipynb│ │
+    │  └──────┬────────────────────────────────────────────────────┘ │
+    │         │                                                      │
+    │         ▼                                                      │
+    │  ┌──────────────┐                                              │
+    │  │ Spark Master │ Port: 8080 (UI), 7077 (Cluster)            │
+    │  └──────┬───────┘                                              │
+    │         │                                                      │
+    │    ┌────┴────┐                                                 │
+    │    ▼         ▼                                                 │
+    │  ┌──────┐  ┌──────┐                                           │
+    │  │Worker│  │Worker│ Memory: 2GB each                          │
+    │  │  1   │  │  2   │                                           │
+    │  └──────┘  └──────┘                                           │
+    │                                                               │
+    │  Spark Structured Streaming:                                  │
+    │  • Read from Kafka                                            │
+    │  • Join with users.csv, movies.csv (from GCS)                │
+    │  • 5-min window aggregations                                 │
+    │  • Churn detection                                           │
+    │  • Trigger: 10 seconds                                       │
+    └───────────────────────────────────────────────────────────────┘
+            │
+            ▼
+    ┌───────────────────────────┐
+    │   Google BigQuery        │
+    │   Dataset: netflix_streaming│
+    │   Table: engagement_health_realtime│
+    └───────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              BATCH LAYER                                        │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+    [GCS: /raw/*.csv]
+            │
+            ▼
+    ┌───────────────────────────────────────────────────────────────┐
+    │                    DOCKER CONTAINERS                          │
+    │  ┌──────────────────────────────────────────────────────────┐ │
+    │  │ Spark Driver (Jupyter)                                   │ │
+    │  │ Notebook: Batch_pipeline_Netflix.ipynb                  │ │
+    │  └──────┬────────────────────────────────────────────────────┘ │
+    │         │                                                      │
+    │         ▼                                                      │
+    │  ┌──────────────┐                                              │
+    │  │ Spark Master │ (Same as Speed Layer)                      │
+    │  └──────┬───────┘                                              │
+    │         │                                                      │
+    │    ┌────┴────┐                                                 │
+    │    ▼         ▼                                                 │
+    │  ┌──────┐  ┌──────┐                                           │
+    │  │Worker│  │Worker│ (Same as Speed Layer)                     │
+    │  │  1   │  │  2   │                                           │
+    │  └──────┘  └──────┘                                           │
+    │                                                               │
+    │  Spark Batch Processing:                                      │
+    │  • Load CSVs from GCS                                         │
+    │  • Data quality checks                                       │
+    │  • Data cleaning                                             │
+    │  • Star schema joins                                         │
+    │  • Monthly aggregations                                      │
+    └───────────────────────────────────────────────────────────────┘
+            │
+            ▼
+    ┌───────────────────────────┐
+    │   Google BigQuery        │
+    │   Dataset: netflix_processed│
+    │   Tables:                 │
+    │   • monthly_engagement   │
+    │   • cohort_retention     │
+    │   • content_performance  │
+    │   • genre_performance    │
+    │   • monthly_active_users │
+    └───────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         SERVING & VISUALIZATION LAYER                          │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────┐
+    │      Google BigQuery                │
+    │                                     │
+    │  Speed Layer Tables:                │
+    │  • engagement_health_realtime       │
+    │                                     │
+    │  Batch Layer Tables:                │
+    │  • monthly_engagement               │
+    │  • cohort_retention                │
+    │  • content_performance             │
+    │  • genre_performance               │
+    │  • monthly_active_users            │
+    └──────────────┬──────────────────────┘
+                   │
+                   ▼
+    ┌─────────────────────────────────────┐
+    │      Looker Studio                  │
+    │                                     │
+    │  Dashboard 1: Real-Time Engagement   │
+    │  • Active users per 5-min          │
+    │  • Churn risk alerts                │
+    │  • Engagement metrics               │
+    │                                     │
+    │  Dashboard 2: Historical Trends      │
+    │  • MAU per country/plan             │
+    │  • Retention curves                 │
+    │  • Genre performance                │
+    └─────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                              KEY CHARACTERISTICS                                 ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║ SPEED LAYER:  Real-time processing, 5-min windows, <1 min latency             ║
+║ BATCH LAYER:  Historical processing, monthly aggregations, hourly/daily runs    ║
+║ SERVING:      Unified BigQuery interface for both layers                       ║
+║ VIZ:          Two dashboards for different use cases                            ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
