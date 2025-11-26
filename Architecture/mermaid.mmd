@@ -1,0 +1,115 @@
+%%{init: {'theme': 'default'}}%%
+flowchart TD
+
+  %% Color Class Definitions
+  classDef DataSource fill:#D6EBFF,stroke:#004A8D,stroke-width:2px
+  classDef Storage fill:#D5FFD6,stroke:#007726,stroke-width:2px
+  classDef SpeedLayer fill:#FFD0B2,stroke:#C2410C,stroke-width:2px
+  classDef BatchLayer fill:#D0E0FF,stroke:#3057AB,stroke-width:2px
+  classDef Serving fill:#FFF8C6,stroke:#C2B100,stroke-width:2px
+  classDef Viz fill:#E0D6FA,stroke:#552A8D,stroke-width:2px
+  classDef Infra fill:#E6E6E6,stroke:#888,stroke-width:1.5px
+
+  %% Data Sources & Storage
+  subgraph DataSources["Data Sources"]
+    ds1["Netflix Dataset (Kaggle)<br/>users.csv, movies.csv,<br/>watch_history.csv,<br/>reviews.csv,<br/>search_logs.csv,<br/>recommendation_logs.csv"]
+  end
+
+  subgraph StorageLayer["Cloud Storage (GCS)"]
+    gcs1["Google Cloud Storage<br/>Bucket: data_netflix_2025<br/>/raw/ (CSV)<br/>/streaming/ (JSON)"]
+  end
+
+  %% VM & File System
+  subgraph VM["Compute Engine VM"]
+    vm_desc["Docker Compose Stack<br/>Spark + Kafka + Zookeeper<br/>All containers run on this VM"]
+    vm_fs["VM File System Mounts<br/>/home/jovyan/notebooks (Notebooks)<br/>/home/jovyan/checkpoint (Checkpoint)<br/>/home/jovyan/data (Data)"]
+  end
+
+  %% Speed Layer
+  subgraph Speed["Speed Layer (Inside VM)"]
+    kafka_prod["Kafka Producer<br/>kafka_producer.py<br/>Reads JSON from /streaming/<br/>5 events/sec"]
+    zk["Zookeeper<br/>Port: 2181"]
+    kafka["Kafka Broker<br/>Topic: netflix_watch_events<br/>3 partitions<br/>Ports: 9092/9093"]
+    
+    subgraph SparkInfra1["Spark (Streaming)"]
+      direction TB
+      spark_driver_s["Spark Driver (Jupyter)<br/>Port: 8888<br/>03_streaming_pipeline...ipynb"]
+      spark_master_s["Spark Master<br/>Ports: 8080/7077"]
+      worker1_s["Spark Worker 1<br/>Port: 8081<br/>2GB"]
+      worker2_s["Spark Worker 2<br/>Port: 8082<br/>2GB"]
+      spark_stream["Spark Structured Streaming<br/>Joins static data<br/>5-min windows<br/>10s triggers<br/>Churn detection"]
+    end
+  end
+  class Speed SpeedLayer
+
+  %% Batch Layer
+  subgraph Batch["Batch Layer (Inside VM)"]
+    cron["Scheduler (cron/Airflow)<br/>Triggers Batch_pipeline_Netflix.py<br/>every 24h"]:::BatchLayer
+    subgraph SparkInfra2["Spark (Batch)"]
+      direction TB
+      spark_driver_b["Spark Driver (Jupyter)<br/>Batch_pipeline_Netflix.ipynb"]
+      spark_master_b["Spark Master"]
+      worker1_b["Spark Worker 1"]
+      worker2_b["Spark Worker 2"]
+      spark_batch["Spark Batch Processing<br/>Reads CSVs from GCS<br/>Cleans, star join<br/>Monthly aggregations"]
+    end
+  end
+  class Batch BatchLayer
+
+  %% Serving Layer
+  subgraph Serve["Serving Layer"]
+   bq["Google BigQuery<br/>Datasets:<br/>netflix_streaming.engagement_health_realtime<br/>netflix_processed.*"]
+  end
+  class Serve Serving
+
+  %% Visualization Layer
+  subgraph VizLayer["Visualization"]
+   looker1["Looker Studio<br/>Dashboard 1:<br/>Real-Time Engagement"]
+   looker2["Looker Studio<br/>Dashboard 2:<br/>Historical Trends"]
+  end
+  class VizLayer Viz
+
+
+  %% MAIN FLOW CONNECTIONS
+
+  %% SPEED LAYER FLOW
+  ds1 -- "Ingest" --> gcs1
+  gcs1 -- "/streaming/ JSON" --> kafka_prod
+  kafka_prod -- "Events" --> kafka
+  zk -. "Manages" .-> kafka
+  kafka -- "Stream" --> spark_stream
+  gcs1 -. "Static data<br/>/raw/users.csv,<br/>movies.csv" .-> spark_stream
+  spark_stream -- "Real-time metrics" --> bq
+  bq -- "Realtime data" --> looker1
+
+  %% BATCH LAYER FLOW
+  ds1 -- "Batch ingest" --> gcs1
+  gcs1 -- "/raw/ CSVs" --> spark_batch
+  cron -- "Runs Batch_pipeline_Netflix.py" --> spark_driver_b
+  spark_batch -- "Historic tables" --> bq
+  bq -- "Historical data" --> looker2
+
+  %% VM connections
+  vm_desc --> vm_fs
+  vm_desc -. "Hosts Spark + Kafka containers" .-> spark_master_s
+  vm_desc -. "Hosts Spark + Kafka containers" .-> spark_master_b
+
+  %% INFRA INTERCONNECTIONS (Speed Layer)
+  spark_driver_s -- "cluster connect" --> spark_master_s
+  spark_master_s -- "distributes" --> worker1_s
+  spark_master_s -- "distributes" --> worker2_s
+  spark_stream -. "uses cluster" .-> spark_master_s
+
+  %% INFRA INTERCONNECTIONS (Batch Layer)
+  spark_driver_b -- "cluster connect" --> spark_master_b
+  spark_master_b -- "distributes" --> worker1_b
+  spark_master_b -- "distributes" --> worker2_b
+  spark_batch -. "uses cluster" .-> spark_master_b
+
+  %% Class assignments for nodes
+  class ds1 DataSource
+  class gcs1 Storage
+  class kafka_prod,kafka,zk,spark_driver_s,spark_master_s,worker1_s,worker2_s,spark_stream SpeedLayer
+  class spark_driver_b,spark_master_b,worker1_b,worker2_b,spark_batch BatchLayer
+  class bq Serving
+  class looker1,looker2 Viz
