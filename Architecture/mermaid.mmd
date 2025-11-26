@@ -30,31 +30,28 @@ flowchart TD
     kafka_prod["Kafka Producer<br/>kafka_producer.py<br/>Reads JSON from /streaming/<br/>5 events/sec"]
     zk["Zookeeper<br/>Port: 2181"]
     kafka["Kafka Broker<br/>Topic: netflix_watch_events<br/>3 partitions<br/>Ports: 9092/9093"]
-    
-    subgraph SparkInfra1["Spark (Streaming)"]
-      direction TB
-      spark_driver_s["Spark Driver (Jupyter)<br/>Port: 8888<br/>03_streaming_pipeline...ipynb"]
-      spark_master_s["Spark Master<br/>Ports: 8080/7077"]
-      worker1_s["Spark Worker 1<br/>Port: 8081<br/>2GB"]
-      worker2_s["Spark Worker 2<br/>Port: 8082<br/>2GB"]
-      spark_stream["Spark Structured Streaming<br/>Joins static data<br/>5-min windows<br/>10s triggers<br/>Churn detection"]
-    end
+    spark_driver_s["Spark Driver (Jupyter)<br/>Port: 8888<br/>03_streaming_pipeline...ipynb"]
+    spark_stream["Spark Structured Streaming<br/>Joins static data<br/>5-min windows<br/>10s triggers<br/>Churn detection"]
   end
   class Speed SpeedLayer
 
   %% Batch Layer
   subgraph Batch["Batch Layer (Inside VM)"]
     cron["Scheduler (cron/Airflow)<br/>Triggers Batch_pipeline_Netflix.py<br/>every 24h"]:::BatchLayer
-    subgraph SparkInfra2["Spark (Batch)"]
-      direction TB
-      spark_driver_b["Spark Driver (Jupyter)<br/>Batch_pipeline_Netflix.ipynb"]
-      spark_master_b["Spark Master"]
-      worker1_b["Spark Worker 1"]
-      worker2_b["Spark Worker 2"]
-      spark_batch["Spark Batch Processing<br/>Reads CSVs from GCS<br/>Cleans, star join<br/>Monthly aggregations"]
-    end
+    spark_driver_b["Spark Driver (Jupyter)<br/>Batch_pipeline_Netflix.ipynb / .py"]
+    spark_batch["Spark Batch Processing<br/>Reads CSVs from GCS<br/>Cleans, star join<br/>Monthly aggregations"]
   end
   class Batch BatchLayer
+
+  %% Shared Spark Cluster (single master + workers)
+  subgraph SparkCluster["Spark Cluster (shared inside VM)"]
+    spark_master["Spark Master<br/>Ports: 8080 / 7077"]
+    worker1["Spark Worker 1<br/>Port: 8081<br/>2GB"]
+    worker2["Spark Worker 2<br/>Port: 8082<br/>2GB"]
+    spark_master -- "distributes" --> worker1
+    spark_master -- "distributes" --> worker2
+  end
+  class SparkCluster Infra
 
   %% Serving Layer
   subgraph Serve["Serving Layer"]
@@ -91,25 +88,20 @@ flowchart TD
 
   %% VM connections
   vm_desc --> vm_fs
-  vm_desc -. "Hosts Spark + Kafka containers" .-> spark_master_s
-  vm_desc -. "Hosts Spark + Kafka containers" .-> spark_master_b
+  vm_desc -. "Hosts Spark + Kafka containers" .-> spark_master
+  vm_desc -. "Hosts Spark + Kafka containers" .-> kafka
 
-  %% INFRA INTERCONNECTIONS (Speed Layer)
-  spark_driver_s -- "cluster connect" --> spark_master_s
-  spark_master_s -- "distributes" --> worker1_s
-  spark_master_s -- "distributes" --> worker2_s
-  spark_stream -. "uses cluster" .-> spark_master_s
-
-  %% INFRA INTERCONNECTIONS (Batch Layer)
-  spark_driver_b -- "cluster connect" --> spark_master_b
-  spark_master_b -- "distributes" --> worker1_b
-  spark_master_b -- "distributes" --> worker2_b
-  spark_batch -. "uses cluster" .-> spark_master_b
+  %% INFRA INTERCONNECTIONS TO SHARED SPARK CLUSTER
+  spark_driver_s -- "submits jobs" --> spark_master
+  spark_stream -. "uses executors" .-> spark_master
+  spark_driver_b -- "submits jobs" --> spark_master
+  spark_batch -. "uses executors" .-> spark_master
 
   %% Class assignments for nodes
   class ds1 DataSource
   class gcs1 Storage
-  class kafka_prod,kafka,zk,spark_driver_s,spark_master_s,worker1_s,worker2_s,spark_stream SpeedLayer
-  class spark_driver_b,spark_master_b,worker1_b,worker2_b,spark_batch BatchLayer
+  class kafka_prod,kafka,zk,spark_driver_s,spark_stream SpeedLayer
+  class spark_driver_b,cron,spark_batch BatchLayer
+  class spark_master,worker1,worker2 Infra
   class bq Serving
   class looker1,looker2 Viz
