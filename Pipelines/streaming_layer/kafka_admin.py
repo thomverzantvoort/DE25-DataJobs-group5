@@ -53,7 +53,7 @@ if __name__ == "__main__":
     print(f"\nConnected to Kafka: {KAFKA_BOOTSTRAP_SERVERS}")
 
     # Optional: Delete existing topic (uncomment to reset)
-    delete_topic(admin_client, TOPIC_NAME)
+    #delete_topic(admin_client, TOPIC_NAME)
 
     # Create topic
     create_topic(admin_client, TOPIC_NAME, NUM_PARTITIONS, REPLICATION_FACTOR)
