@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[ ]:
 
 
 from pyspark.sql import SparkSession
@@ -15,7 +15,6 @@ project_id = "de2025-471807"
 bq_dataset_processed = "netflix_processed"  # Dataset for cleaned/processed data and aggregations
 temp_bucket = "netflix-group5-temp"
 gcs_bucket = "netflix_data_25"  # GCS bucket for raw data
-processed_path = "/home/jovyan/data/processed/"  # Optional: also save to local CSV
 
 # -------------------------------------------------------------------
 # 2. Spark session setup with GCS and BigQuery support
@@ -38,13 +37,13 @@ conf = spark.sparkContext._jsc.hadoopConfiguration()
 conf.set("fs.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem")
 conf.set("fs.AbstractFileSystem.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS")
 
-print("✅ Spark session created with GCS")
+print("✓ Spark session created with GCS")
 print(f"   App Name: BatchPipelineNetflix")
 print(f"   GCS Bucket: {gcs_bucket} (reading raw data)")
 print(f"   Processed Dataset: {bq_dataset_processed} (writing cleaned tables + aggregations)")
 
 
-# In[5]:
+# In[ ]:
 
 
 # -------------------------------------------------------------------
@@ -62,21 +61,21 @@ tables = {
 
 dataframes = {}
 for name, csv_file in tables.items():
-    gcs_path = f"gs://{gcs_bucket}/{csv_file}"
+    gcs_path = f"gs://{gcs_bucket}/raw/{csv_file}"
     print(f"Loading {name} from: {gcs_path}")
     df = spark.read \
         .option("header", "true") \
         .option("inferSchema", "true") \
         .csv(gcs_path)
     dataframes[name] = df
-    print(f"✅ Loaded {name}: {df.count()} rows, {len(df.columns)} columns")
+    print(f"✓ Loaded {name}: {df.count()} rows, {len(df.columns)} columns")
 
 print("\n" + "="*80)
-print("📊 DATA LOADING COMPLETE (from GCS)")
+print("DATA LOADING COMPLETE (from GCS)")
 print("="*80)
 
 
-# In[6]:
+# In[ ]:
 
 
 # -------------------------------------------------------------------
@@ -87,7 +86,7 @@ print("🔍 SCHEMA INSPECTION")
 print("="*80)
 
 for name, df in dataframes.items():
-    print(f"\n📋 {name.upper()} Schema:")
+    print(f"\n {name.upper()} Schema:")
     print("-" * 80)
     df.printSchema()
     
@@ -101,18 +100,18 @@ for name, df in dataframes.items():
         key_columns.append("session_id")
     
     if key_columns:
-        print(f"\n   🔑 Key columns for joins: {', '.join(key_columns)}")
+        print(f"\n  Key columns for joins: {', '.join(key_columns)}")
         
         # Sample a few rows to understand data structure
-        print(f"\n   📝 Sample data (first 3 rows):")
+        print(f"\nSample data (first 3 rows):")
         df.select(key_columns).show(3, truncate=False)
 
 print("\n" + "="*80)
-print("✅ Schema inspection complete")
+print("Schema inspection complete")
 print("="*80)
 
 
-# In[7]:
+# In[ ]:
 
 
 # -------------------------------------------------------------------
@@ -121,7 +120,7 @@ print("="*80)
 from pyspark.sql.types import DoubleType, FloatType, IntegerType, LongType, DecimalType
 
 def check_data_quality(df, name):
-    print(f"\n📊 Data Quality Report: {name}")
+    print(f"\nData Quality Report: {name}")
     total_rows = df.count()
     print(f"   Total rows: {total_rows}")
     print(f"   Total columns: {len(df.columns)}")
@@ -146,20 +145,20 @@ def check_data_quality(df, name):
             missing_counts[col_name] = missing
     
     if missing_counts:
-        print(f"   ⚠️  Missing values found:")
+        print(f"  Missing values found:")
         for col_name, count in missing_counts.items():
             pct = (count / total_rows) * 100
             print(f"      - {col_name}: {count} ({pct:.1f}%)")
     else:
-        print(f"   ✅ No missing values")
+        print(f"   ✓ No missing values")
     
     # Duplicates
     duplicate_count = total_rows - df.dropDuplicates().count()
     if duplicate_count > 0:
         pct = (duplicate_count / total_rows) * 100
-        print(f"   ⚠️  Duplicates: {duplicate_count} rows ({pct:.1f}%)")
+        print(f"Duplicates: {duplicate_count} rows ({pct:.1f}%)")
     else:
-        print(f"   ✅ No duplicates")
+        print(f"✓ No duplicates")
     
     return missing_counts, duplicate_count
 
@@ -170,7 +169,7 @@ for name, df in dataframes.items():
     quality_reports[name] = {"missing": missing, "duplicates": duplicates}
 
 
-# In[8]:
+# In[ ]:
 
 
 # -------------------------------------------------------------------
@@ -250,17 +249,17 @@ for name, df in dataframes.items():
     
     removed_rows = original_count - cleaned_count
     removed_cols = original_cols - cleaned_cols
-    print(f"✅ {name}: {original_count} → {cleaned_count} rows, {original_cols} → {cleaned_cols} cols (removed {removed_rows} rows, {removed_cols} cols)")
+    print(f"{name}: {original_count} → {cleaned_count} rows, {original_cols} → {cleaned_cols} cols (removed {removed_rows} rows, {removed_cols} cols)")
 
 
-# In[9]:
+# In[ ]:
 
 
 # -------------------------------------------------------------------
 # 7. Save cleaned data to BigQuery
 # -------------------------------------------------------------------
 print("\n" + "="*80)
-print("📤 SAVING CLEANED DATA TO BIGQUERY")
+print("SAVING CLEANED DATA TO BIGQUERY")
 print("="*80)
 print("\nWriting cleaned data to BigQuery...")
 
@@ -283,13 +282,13 @@ for name, df_clean in cleaned_dataframes.items():
         .option('table', bq_table) \
         .mode("overwrite") \
         .save()
-    print(f"   ✅ {name} written successfully ({df_clean.count()} rows)")
+    print(f"   {name} written successfully ({df_clean.count()} rows)")
 
-print(f"\n✅ All cleaned data written to BigQuery dataset: {bq_dataset_processed}")
-print("\n🎉 Data quality check and cleaning completed!")
+print(f"\n ✓ All cleaned data written to BigQuery dataset: {bq_dataset_processed}")
+print("\nData quality check and cleaning completed!")
 
 
-# In[10]:
+# In[ ]:
 
 
 # -------------------------------------------------------------------
@@ -302,7 +301,7 @@ print("\nBuilding star schema: watch_history as fact table, others as dimensions
 
 # Start with the fact table (watch_history)
 fact_table = cleaned_dataframes["watch_history"]
-print(f"\n✅ Fact table (watch_history): {fact_table.count()} rows")
+print(f"\n ✓ Fact table (watch_history): {fact_table.count()} rows")
 
 # Join with dimension tables
 # 1. Join with users (dimension)
@@ -311,7 +310,7 @@ joined_df = fact_table.join(
     on="user_id",
     how="inner"
 )
-print(f"✅ After joining with users: {joined_df.count()} rows")
+print(f"✓ After joining with users: {joined_df.count()} rows")
 
 # 2. Join with movies (dimension)
 joined_df = joined_df.join(
@@ -319,7 +318,7 @@ joined_df = joined_df.join(
     on="movie_id",
     how="inner"
 )
-print(f"✅ After joining with movies: {joined_df.count()} rows")
+print(f"✓ After joining with movies: {joined_df.count()} rows")
 
 # 3. Optionally join with reviews (for rating information)
 # Use left join to keep all watch history even if no review exists
@@ -341,10 +340,10 @@ joined_df = joined_df.join(
     on=["user_id", "movie_id"],
     how="left"
 )
-print(f"✅ After joining with reviews: {joined_df.count()} rows")
+print(f"✓ After joining with reviews: {joined_df.count()} rows")
 
 # Show sample of joined data
-print("\n📊 Sample of joined data (first 5 rows):")
+print("\n Sample of joined data (first 5 rows):")
 print("-" * 80)
 joined_df.select(
     "session_id", "user_id", "movie_id", "watch_date",
@@ -352,11 +351,11 @@ joined_df.select(
     "watch_duration_minutes", "action"
 ).show(5, truncate=False)
 
-print("\n✅ Star schema join complete!")
+print("\n ✓ Star schema join complete!")
 print(f"   Final joined dataset: {joined_df.count()} rows, {len(joined_df.columns)} columns")
 
 
-# In[11]:
+# In[ ]:
 
 
 # -------------------------------------------------------------------
@@ -385,19 +384,19 @@ if 'watch_date' in joined_df.columns:
     joined_df = joined_df.withColumn("watch_year", year(col("watch_date_parsed")))
     joined_df = joined_df.withColumn("watch_month", month(col("watch_date_parsed")))
     
-    print("✅ Parsed watch_date and extracted year/month")
+    print("✓ Parsed watch_date and extracted year/month")
 
 # Handle missing watch_duration_minutes (fill with 0 or median)
 # For now, we'll filter out nulls in aggregations, but we could also fill
-print(f"\n📊 Data quality after transformation:")
+print(f"\n Data quality after transformation:")
 print(f"   Total rows: {joined_df.count()}")
 print(f"   Rows with watch_duration_minutes: {joined_df.filter(col('watch_duration_minutes').isNotNull()).count()}")
 print(f"   Rows with watch_date_parsed: {joined_df.filter(col('watch_date_parsed').isNotNull()).count()}")
 
-print("\n✅ Data transformation complete!")
+print("\n✓ Data transformation complete!")
 
 
-# In[12]:
+# In[ ]:
 
 
 # -------------------------------------------------------------------
@@ -414,7 +413,7 @@ df_for_agg = joined_df.filter(
 )
 
 # 1. Average rating per genre (monthly)
-print("\n1️⃣ Computing average rating per genre (monthly)...")
+print("\n 1. Computing average rating per genre (monthly)...")
 content_performance = df_for_agg.filter(col("user_rating").isNotNull()).groupBy(
     "watch_year",
     "watch_month",
@@ -427,13 +426,13 @@ content_performance = df_for_agg.filter(col("user_rating").isNotNull()).groupBy(
     countDistinct("user_id").alias("unique_users")
 ).orderBy("watch_year", "watch_month", "genre_primary")
 
-print("✅ Content performance aggregation complete")
+print("✓ Content performance aggregation complete")
 print(f"   Rows in content_performance: {content_performance.count()}")
-print("\n📊 Sample content performance data:")
+print("\n Sample content performance data:")
 content_performance.show(10, truncate=False)
 
 # 2. Genre performance over time (overall, not just monthly)
-print("\n2️⃣ Computing overall genre performance...")
+print("\n 2. Computing overall genre performance...")
 genre_performance = df_for_agg.groupBy("genre_primary").agg(
     count("*").alias("total_views"),
     spark_sum("watch_duration_minutes").alias("total_watch_time_minutes"),
@@ -443,13 +442,13 @@ genre_performance = df_for_agg.groupBy("genre_primary").agg(
     avg("user_rating").alias("avg_rating")
 ).orderBy(spark_sum("watch_duration_minutes").desc())
 
-print("✅ Genre performance aggregation complete")
+print("✓ Genre performance aggregation complete")
 print(f"   Rows in genre_performance: {genre_performance.count()}")
-print("\n📊 Top genres by watch time:")
+print("\n Top genres by watch time:")
 genre_performance.show(10, truncate=False)
 
 
-# In[13]:
+# In[ ]:
 
 
 # -------------------------------------------------------------------
@@ -460,7 +459,7 @@ print("👥 USER ENGAGEMENT AGGREGATIONS")
 print("="*80)
 
 # 1. Monthly Engagement: Total watch time per country and plan
-print("\n1️⃣ Computing monthly engagement (watch time per country and plan)...")
+print("\n 1. Computing monthly engagement (watch time per country and plan)...")
 monthly_engagement = df_for_agg.groupBy(
     "watch_year",
     "watch_month",
@@ -474,13 +473,13 @@ monthly_engagement = df_for_agg.groupBy(
     countDistinct("movie_id").alias("unique_content_viewed")
 ).orderBy("watch_year", "watch_month", "country", "subscription_plan")
 
-print("✅ Monthly engagement aggregation complete")
+print("✓ Monthly engagement aggregation complete")
 print(f"   Rows in monthly_engagement: {monthly_engagement.count()}")
-print("\n📊 Sample monthly engagement data:")
+print("\n Sample monthly engagement data:")
 monthly_engagement.show(10, truncate=False)
 
 # 2. Monthly Active Users (MAU) - overall
-print("\n2️⃣ Computing Monthly Active Users (MAU)...")
+print("\n 2. Computing Monthly Active Users (MAU)...")
 mau = df_for_agg.groupBy(
     "watch_year",
     "watch_month"
@@ -490,13 +489,13 @@ mau = df_for_agg.groupBy(
     spark_sum("watch_duration_minutes").alias("total_watch_time_minutes")
 ).orderBy("watch_year", "watch_month")
 
-print("✅ MAU aggregation complete")
+print("✓ MAU aggregation complete")
 print(f"   Rows in MAU: {mau.count()}")
-print("\n📊 Monthly Active Users:")
+print("\n Monthly Active Users:")
 mau.show(20, truncate=False)
 
 # 3. Cohort Retention Analysis
-print("\n3️⃣ Computing cohort retention...")
+print("\ 3. Computing cohort retention...")
 # Get user's first watch date (cohort)
 user_cohorts = df_for_agg.groupBy("user_id").agg(
     spark_min("watch_date_parsed").alias("first_watch_date")
@@ -523,71 +522,71 @@ cohort_retention = user_activity.groupBy(
     (col("watch_year") - col("cohort_year")) * 12 + (col("watch_month") - col("cohort_month"))
 ).orderBy("cohort_year", "cohort_month", "watch_year", "watch_month")
 
-print("✅ Cohort retention aggregation complete")
+print("✓ Cohort retention aggregation complete")
 print(f"   Rows in cohort_retention: {cohort_retention.count()}")
-print("\n📊 Sample cohort retention data:")
+print("\n Sample cohort retention data:")
 cohort_retention.show(20, truncate=False)
 
-print("\n✅ All user engagement aggregations complete!")
+print("\n ✓ All user engagement aggregations complete!")
 
 
-# In[14]:
+# In[ ]:
 
 
 # -------------------------------------------------------------------
 # 12. Write Aggregated Data to BigQuery
 # -------------------------------------------------------------------
 print("\n" + "="*80)
-print("📤 WRITING AGGREGATED DATA TO BIGQUERY")
+print("WRITING AGGREGATED DATA TO BIGQUERY")
 print("="*80)
 
 # Write monthly_engagement table (as required by assignment)
-print("\n1️⃣ Writing monthly_engagement table...")
+print("\n 1. Writing monthly_engagement table...")
 monthly_engagement.write.format('bigquery') \
     .option('table', f"{project_id}.{bq_dataset_processed}.monthly_engagement") \
     .mode("overwrite") \
     .save()
-print(f"   ✅ monthly_engagement written to {bq_dataset_processed}.monthly_engagement")
+print(f"   ✓ monthly_engagement written to {bq_dataset_processed}.monthly_engagement")
 print(f"   Rows: {monthly_engagement.count()}")
 
 # Write cohort_retention table (as required by assignment)
-print("\n2️⃣ Writing cohort_retention table...")
+print("\n 2. Writing cohort_retention table...")
 cohort_retention.write.format('bigquery') \
     .option('table', f"{project_id}.{bq_dataset_processed}.cohort_retention") \
     .mode("overwrite") \
     .save()
-print(f"   ✅ cohort_retention written to {bq_dataset_processed}.cohort_retention")
+print(f"   ✓ cohort_retention written to {bq_dataset_processed}.cohort_retention")
 print(f"   Rows: {cohort_retention.count()}")
 
-# Optional: Write additional aggregated tables for dashboard
-print("\n3️⃣ Writing additional aggregated tables...")
+# Write additional aggregated tables for dashboard
+print("\n 3. Writing additional aggregated tables...")
 
 # Content performance
 content_performance.write.format('bigquery') \
     .option('table', f"{project_id}.{bq_dataset_processed}.content_performance") \
     .mode("overwrite") \
     .save()
-print(f"   ✅ content_performance written to {bq_dataset_processed}.content_performance")
+print(f"   ✓ content_performance written to {bq_dataset_processed}.content_performance")
 
 # Genre performance
 genre_performance.write.format('bigquery') \
     .option('table', f"{project_id}.{bq_dataset_processed}.genre_performance") \
     .mode("overwrite") \
     .save()
-print(f"   ✅ genre_performance written to {bq_dataset_processed}.genre_performance")
+print(f"   ✓ genre_performance written to {bq_dataset_processed}.genre_performance")
 
 # MAU
 mau.write.format('bigquery') \
     .option('table', f"{project_id}.{bq_dataset_processed}.monthly_active_users") \
     .mode("overwrite") \
     .save()
-print(f"   ✅ monthly_active_users written to {bq_dataset_processed}.monthly_active_users")
+print(f"   ✓ monthly_active_users written to {bq_dataset_processed}.monthly_active_users")
 
 print("\n" + "="*80)
-print("🎉 BATCH PIPELINE COMPLETE!")
+print("BATCH PIPELINE COMPLETE!")
 print("="*80)
-print(f"\n✅ All data written to BigQuery dataset: {bq_dataset_processed}")
-print("\n📊 Summary of outputs:")
+print(f"\n ✓All data written to BigQuery dataset: {bq_dataset_processed}")
+print("\n Summary of outputs:")
 print(f"   - Cleaned tables:")
 print(f"     • Users, Movies, WatchHistory, RecommendationLogs, Reviews, SearchLogs")
 print(f"   - Aggregated tables:")
@@ -596,10 +595,10 @@ print(f"     • cohort_retention (required)")
 print(f"     • content_performance (optional)")
 print(f"     • genre_performance (optional)")
 print(f"     • monthly_active_users (optional)")
-print("\n🚀 Ready for Looker Studio dashboard creation!")
+print("\nReady for Looker Studio dashboard creation!")
 
 
-# In[15]:
+# In[ ]:
 
 
 # Stop the Spark context
